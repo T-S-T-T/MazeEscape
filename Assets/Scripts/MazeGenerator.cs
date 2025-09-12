@@ -4,89 +4,133 @@ using UnityEngine;
 
 public class MazeGenerator : MonoBehaviour
 {
-    public int width = 10;
-    public int height = 10;
-    private bool[,] maze;
-    private List<Vector2Int> correctPath = new List<Vector2Int>();
+    [Header("Grid (use odd numbers)")]
+    public int width = 21;   // odd
+    public int height = 21;  // odd
 
+    [Header("Prefabs")]
     public GameObject wallPrefab;
     public GameObject startMarkerPrefab;
     public GameObject finishMarkerPrefab;
     public GameObject pathMarkerPrefab;
 
+    private bool[,] open; // true = carved/open
+    private List<Vector2Int> path = new List<Vector2Int>();
+    private readonly List<GameObject> spawned = new List<GameObject>();
+
     void Start()
     {
-        maze = new bool[width, height];
-        GenerateMaze(0, 0);
+        GenerateAndDraw();
+    }
+
+    public void GenerateAndDraw()
+    {
+        // Clear previous
+        foreach (var go in spawned) if (go) Destroy(go);
+        spawned.Clear();
+        path.Clear();
+
+        // Enforce odd dimensions for 2-step carving
+        width = Mathf.Max(3, width | 1);
+        height = Mathf.Max(3, height | 1);
+
+        open = new bool[width, height];
+
+        // Start on (0,0) cell (must be even indices in this scheme)
+        var start = new Vector2Int(0, 0);
+        var exit = new Vector2Int(width - 1, height - 1);
+
+        // Carve perimeter cells to be consistent
+        Carve(start);
+
+        // Generate with DFS that returns true when exit found
+        DFSFindPath(start.x, start.y, exit);
+
         DrawMaze();
-        PlaceStartAndFinish();
+        PlaceStartAndFinish(start, exit);
         DrawCorrectPath();
     }
 
-    void GenerateMaze(int x, int y)
+    void Carve(Vector2Int p) => open[p.x, p.y] = true;
+
+    bool IsInside(int x, int y) => x >= 0 && y >= 0 && x < width && y < height;
+
+    bool DFSFindPath(int x, int y, Vector2Int exit)
     {
-        maze[x, y] = true;
-        correctPath.Add(new Vector2Int(x, y));
+        // Mark current cell open and add to path if not present
+        if (!open[x, y]) open[x, y] = true;
+        path.Add(new Vector2Int(x, y));
 
-        if (x == width - 1 && y == height - 1)
-            return; // Exit reached
+        if (x == exit.x && y == exit.y)
+            return true;
 
-        List<Vector2Int> directions = new List<Vector2Int> { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right }.OrderBy(d => Random.value).ToList();
+        var dirs = new List<Vector2Int> { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right }
+            .OrderBy(_ => Random.value).ToList();
 
-        foreach (var dir in directions)
+        foreach (var d in dirs)
         {
-            int nx = x + dir.x * 2;
-            int ny = y + dir.y * 2;
+            // We carve walls between cells; step size 2 ensures “cell-wall-cell” pattern
+            int nx = x + d.x * 2;
+            int ny = y + d.y * 2;
 
-            if (nx >= 0 && ny >= 0 && nx < width && ny < height && !maze[nx, ny])
-            {
-                maze[x + dir.x, y + dir.y] = true;
-                GenerateMaze(nx, ny);
+            if (!IsInside(nx, ny) || open[nx, ny]) continue;
 
-                if (correctPath.Last() == new Vector2Int(width - 1, height - 1))
-                    return; // Stop once exit is reached
-            }
+            // Carve corridor cell between current and next
+            int bx = x + d.x;
+            int by = y + d.y;
+            open[bx, by] = true;
+
+            // Add corridor to path so visuals are continuous
+            path.Add(new Vector2Int(bx, by));
+
+            // Carve next cell and recurse
+            open[nx, ny] = true;
+            if (DFSFindPath(nx, ny, exit))
+                return true;
+
+            // Backtrack: remove corridor and continue trying other directions
+            path.RemoveAt(path.Count - 1); // remove corridor
         }
 
-        //correctPath.RemoveAt(correctPath.Count - 1); // Backtrack
+        // Backtrack current cell if dead end
+        path.RemoveAt(path.Count - 1);
+        return false;
     }
-
 
     void DrawMaze()
     {
+        // Instantiate walls where open == false
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
-                if (!maze[x, y])
+                if (!open[x, y])
                 {
-                    Vector3 pos = new Vector3(x, 0.5f, y);
-                    Instantiate(wallPrefab, pos, Quaternion.identity);
+                    var pos = new Vector3(x, 0.5f, y);
+                    spawned.Add(Instantiate(wallPrefab, pos, Quaternion.identity, transform));
                 }
             }
         }
     }
 
-    void PlaceStartAndFinish()
+    void PlaceStartAndFinish(Vector2Int start, Vector2Int exit)
     {
-        Vector3 startPos = new Vector3(0, 0.5f, 0); // Entrance
-        Vector3 finishPos = new Vector3(width - 1, 0.5f, height - 1); // Exit
-
-        Instantiate(startMarkerPrefab, startPos, Quaternion.identity);
-        Instantiate(finishMarkerPrefab, finishPos, Quaternion.identity);
+        var s = Instantiate(startMarkerPrefab, new Vector3(start.x, 0.5f, start.y), Quaternion.identity, transform);
+        var f = Instantiate(finishMarkerPrefab, new Vector3(exit.x, 0.5f, exit.y), Quaternion.identity, transform);
+        spawned.Add(s);
+        spawned.Add(f);
     }
 
     void DrawCorrectPath()
     {
-        Debug.Log(correctPath);
-        foreach (Vector2Int pos in correctPath)
+        if (pathMarkerPrefab == null) return;
+
+        foreach (var cell in path)
         {
-            Debug.Log("Path");
-            Vector3 worldPos = new Vector3(pos.x, 0.1f, pos.y);
-            Instantiate(pathMarkerPrefab, worldPos, Quaternion.identity);
+            // Slightly above ground to avoid z-fighting
+            var pos = new Vector3(cell.x, 0.06f, cell.y);
+            var marker = Instantiate(pathMarkerPrefab, pos, Quaternion.identity, transform);
+            spawned.Add(marker);
         }
     }
-
-
-
 }

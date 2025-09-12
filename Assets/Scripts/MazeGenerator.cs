@@ -7,6 +7,7 @@ public class MazeGenerator : MonoBehaviour
     public int width = 10;
     public int height = 10;
     private bool[,] maze;
+    private List<Vector2Int> correctPath = new List<Vector2Int>();
 
     public GameObject wallPrefab;
     public GameObject startMarkerPrefab;
@@ -19,9 +20,8 @@ public class MazeGenerator : MonoBehaviour
         GenerateMaze(0, 0);
         DrawMaze();
         PlaceStartAndFinish();
+        DrawCorrectPath();
     }
-
-    private List<Vector2Int> correctPath = new List<Vector2Int>();
 
     void GenerateMaze(int x, int y)
     {
@@ -31,9 +31,7 @@ public class MazeGenerator : MonoBehaviour
         if (x == width - 1 && y == height - 1)
             return; // Exit reached
 
-        List<Vector2Int> directions = new List<Vector2Int> {
-        Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right
-    }.OrderBy(d => Random.value).ToList();
+        List<Vector2Int> directions = new List<Vector2Int> { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right }.OrderBy(d => Random.value).ToList();
 
         foreach (var dir in directions)
         {
@@ -50,7 +48,7 @@ public class MazeGenerator : MonoBehaviour
             }
         }
 
-        correctPath.RemoveAt(correctPath.Count - 1); // Backtrack
+        //correctPath.RemoveAt(correctPath.Count - 1); // Backtrack
     }
 
 
@@ -80,8 +78,10 @@ public class MazeGenerator : MonoBehaviour
 
     void DrawCorrectPath()
     {
+        Debug.Log(correctPath);
         foreach (Vector2Int pos in correctPath)
         {
+            Debug.Log("Path");
             Vector3 worldPos = new Vector3(pos.x, 0.1f, pos.y);
             Instantiate(pathMarkerPrefab, worldPos, Quaternion.identity);
         }

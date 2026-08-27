@@ -90,6 +90,7 @@ public class GameManager : MonoBehaviour
     {
         score++;
         UpdateScoreUI();
+        mazeGenerator.IncreaseMaze(2);
         mazeGenerator.GenerateAndDraw();
     }
 

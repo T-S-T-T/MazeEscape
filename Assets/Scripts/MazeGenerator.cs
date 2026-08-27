@@ -15,6 +15,13 @@ public class MazeGenerator : MonoBehaviour
     public GameObject finishMarkerPrefab;
     public GameObject pathMarkerPrefab;
 
+    [Header("Runtime info (read-only)")]
+    public Vector3 StartWorldPosition { get; private set; }
+    public Vector3 FinishWorldPosition { get; private set; }
+
+    // Raised every time a new maze has finished generating (initial + resets).
+    public event System.Action OnMazeGenerated;
+
     private bool[,] open; // true = carved/open
     private readonly List<GameObject> spawned = new List<GameObject>();
     private List<Vector2Int> solutionPath = new List<Vector2Int>();
@@ -52,6 +59,8 @@ public class MazeGenerator : MonoBehaviour
         DrawMaze();
         PlaceStartAndFinish(start, exit);
         DrawCorrectPath(solutionPath);
+
+        OnMazeGenerated?.Invoke();
     }
 
     // ----- Generation: stack-based recursive backtracker (spanning tree)
@@ -149,7 +158,7 @@ public class MazeGenerator : MonoBehaviour
         for (int x = 1; x < width - 1; x += 1) { consider(x, 1); consider(x, height - 2); }
         for (int y = 1; y < height - 1; y += 1) { consider(1, y); consider(width - 2, y); }
 
-        // Fallback in the unlikely event none found (shouldn’t happen)
+        // Fallback in the unlikely event none found (shouldn't happen)
         if (bestDist < 0) best = new Vector2Int(width - 2, height - 2);
 
         return best;
@@ -224,10 +233,24 @@ public class MazeGenerator : MonoBehaviour
 
     void PlaceStartAndFinish(Vector2Int start, Vector2Int exit)
     {
+        StartWorldPosition = new Vector3(start.x * cellSize, 0.5f, start.y * cellSize);
+        FinishWorldPosition = new Vector3(exit.x * cellSize, 0.5f, exit.y * cellSize);
+
         if (startMarkerPrefab)
-            spawned.Add(Instantiate(startMarkerPrefab, new Vector3(start.x * cellSize, 0.5f, start.y * cellSize), Quaternion.identity, transform));
+            spawned.Add(Instantiate(startMarkerPrefab, StartWorldPosition, Quaternion.identity, transform));
+
         if (finishMarkerPrefab)
-            spawned.Add(Instantiate(finishMarkerPrefab, new Vector3(exit.x * cellSize, 0.5f, exit.y * cellSize), Quaternion.identity, transform));
+        {
+            var finishGO = Instantiate(finishMarkerPrefab, FinishWorldPosition, Quaternion.identity, transform);
+            spawned.Add(finishGO);
+
+            // Make sure the finish marker can detect the player without physically blocking them.
+            var col = finishGO.GetComponent<Collider>();
+            if (col) col.isTrigger = true;
+
+            if (!finishGO.GetComponent<FinishZone>())
+                finishGO.AddComponent<FinishZone>();
+        }
     }
 
     void DrawCorrectPath(List<Vector2Int> path)

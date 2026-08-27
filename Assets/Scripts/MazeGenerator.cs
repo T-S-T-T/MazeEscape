@@ -5,8 +5,8 @@ using UnityEngine;
 public class MazeGenerator : MonoBehaviour
 {
     [Header("Grid (use odd numbers)")]
-    public int width = 21;   // odd
-    public int height = 21;  // odd
+    public int width = 5;   // odd
+    public int height = 5;  // odd
     public float cellSize = 1f;
 
     [Header("Prefabs")]
@@ -29,6 +29,12 @@ public class MazeGenerator : MonoBehaviour
     void Start()
     {
         GenerateAndDraw();
+    }
+
+    public void IncreaseMaze(int increase)
+    {
+        width += increase;
+        height += increase;
     }
 
     public void GenerateAndDraw()
